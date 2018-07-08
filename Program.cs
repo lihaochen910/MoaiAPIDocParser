@@ -71,6 +71,7 @@ namespace MoaiAPIDocParser
 
                 foreach (var memitem in menItems)
                 {
+                    // <td class="memname">
                     string funcName = memitem.SelectSingleNode(".//td[@class='memname']").InnerText.Trim();
 
                     if (elm.Value.FunctionDic.ContainsKey(funcName))
@@ -81,6 +82,7 @@ namespace MoaiAPIDocParser
 
                     var functionData = new MoaiClassFunctionData();
                     functionData.FunctionName = funcName;
+                    // <code>
                     functionData.Code = memitem.SelectSingleNode(".//code").InnerText;
 
                     Console.WriteLine(funcName);
@@ -88,9 +90,25 @@ namespace MoaiAPIDocParser
 
                     elm.Value.FunctionDic.Add(funcName, functionData);
 
+                    // <dl class="section return">
+                    // <dt>Returns</dt>
+                    // <dd>nil </dd> or <dd>number min, number max </dd>
+                    string returnInfo =
+                        memitem.SelectSingleNode(".//dl[@class='section return']")?.SelectSingleNode("dd")?.InnerText;
+
+                    // <table class="params">
                     List<HtmlNode> paramNodes =
                         memitem.SelectSingleNode(".//table[@class='params']")?
                             .Descendants("tr")?.ToList();
+
+                    if (returnInfo != null)
+                    {
+                        Console.WriteLine($"Returns {returnInfo}");
+                        string[] returnVars = returnInfo.Split(',');
+                        foreach (var v in returnVars)
+                            if (v.Trim() != "nil")
+                                functionData.FunctionReturns.Add(v.Trim());
+                    }
 
                     if (paramNodes == null)
                     {
@@ -117,18 +135,27 @@ namespace MoaiAPIDocParser
                 }
 
                 Console.WriteLine("\n");
+
+                //Debug
+                //break;
             }
 
-            // 输出sublime-completion文件
-            Console.WriteLine("Prepare to write Moai.sublime-completions.");
-            var scf = new SublimeCompletionsFile();
+            // 输出MoaiApi.lua文件
+            Console.WriteLine("Prepare to write MoaiApi.lua.");
 
-            foreach(var classKV in dic)
+            var fileStream = System.IO.File.CreateText("MoaiApi.lua");
+
+            foreach (var classKV in dic)
             {
-                foreach(var funcKV in classKV.Value.FunctionDic)
+                // 输出类声明信息和EmmyLua文档信息
+                fileStream.WriteLine($"---@class {classKV.Key}");
+                fileStream.WriteLine(classKV.Key + " = { }");
+                fileStream.WriteLine();
+
+                foreach (var funcKV in classKV.Value.FunctionDic)
                 {
-                    var trigger = $"{classKV.Key}.{funcKV.Key}\t{classKV.Key}";
-                    string paramsContent = string.Empty;
+                    // 输出类成员方法和Emmylua文档注释
+
                     for (var i = 0; i < funcKV.Value.FunctionParams.Count; i++)
                     {
                         var typeName = funcKV.Value.FunctionParams[i].Split(' ')[0];
@@ -137,31 +164,43 @@ namespace MoaiAPIDocParser
                         if (typeName == classKV.Key && paramName == "self")
                             continue;
 
+                        fileStream.WriteLine($"---@param {paramName} {typeName}");
+                    }
+
+                    foreach (var returnValue in funcKV.Value.FunctionReturns)
+                    {
+                        var typeName = returnValue.Split(' ')[0];
+
+                        fileStream.WriteLine($"---@return {typeName}");
+                    }
+
+                    bool withSelf = false;
+                    string paramsContent = string.Empty;
+                    for (var i = 0; i < funcKV.Value.FunctionParams.Count; i++)
+                    {
+                        var typeName = funcKV.Value.FunctionParams[i].Split(' ')[0];
+                        var paramName = funcKV.Value.FunctionParams[i].Split(' ')[1];
+
+                        if (typeName == classKV.Key && paramName == "self")
+                        {
+                            withSelf = true;
+                            continue;
+                        }
+
                         //paramsContent += funcKV.Value.FunctionParams[i]
                         //    + ((i == funcKV.Value.FunctionParams.Count - 1) ? "" : ", ");
                         paramsContent += funcKV.Value.FunctionParams[i].Split(' ')[1]
                             + ((i == funcKV.Value.FunctionParams.Count - 1) ? "" : ", ");
                     }
-                    var contents = $"{classKV.Key}.{funcKV.Key}({paramsContent})";
-
-                    var completionData = new SublimeCompletionsFile.CompletionData();
-                    completionData.trigger = trigger;
-                    completionData.contents = contents;
-
-                    scf.completions.Add(completionData);
-
-                    //var completionDataEx = new SublimeCompletionsFile.CompletionData();
-                    //completionDataEx.trigger = $"{funcKV.Key}\t{classKV.Key}"; ;
-                    //completionData.contents = contents;
-
-                    //scf.completions.Add(completionDataEx);
+                    var dot = withSelf ? ":" : ".";
+                    var contents = $"{classKV.Key}{dot}{funcKV.Key}({paramsContent})";
+                    fileStream.WriteLine("function " + contents + " end");
+                    fileStream.WriteLine();
                 }
+
+                fileStream.WriteLine();
             }
-
-            var jsonData = JsonConvert.SerializeObject(scf, Formatting.Indented);
-
-            var fileStream = System.IO.File.CreateText("Moai.sublime-completions");
-            fileStream.Write(jsonData);
+            
             fileStream.Flush();
             fileStream.Close();
 
