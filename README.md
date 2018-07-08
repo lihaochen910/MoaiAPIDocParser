@@ -1,9 +1,9 @@
 # MoaiSDK API Doc parse to IDEA EmmyLua completion file
 Preview:
 
-![image](demm2.png)
+![image](demo2.png)
 
-![image](demm3.png)
+![image](demo3.png)
 
 Old:
 
