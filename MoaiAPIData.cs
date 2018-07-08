@@ -20,10 +20,12 @@ namespace MoaiAPIDocParser
         public string FunctionName;
         public string Code;
         public List<string> FunctionParams;
+        public List<string> FunctionReturns;
 
         public MoaiClassFunctionData()
         {
             FunctionParams = new List<string>();
+            FunctionReturns = new List<string>();
         }
     }
 
