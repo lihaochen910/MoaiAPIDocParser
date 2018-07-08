@@ -69,10 +69,18 @@ namespace MoaiAPIDocParser
                     continue;
                 }
 
+                // FIXME: class MOAIGlobalEventSource has bug.
+                if (elm.Key == "MOAIGlobalEventSource")
+                    continue;
+
                 foreach (var memitem in menItems)
                 {
                     // <td class="memname">
                     string funcName = memitem.SelectSingleNode(".//td[@class='memname']").InnerText.Trim();
+
+                    // patch MOAIMoviePlayerIOS + (int) _init(lua_State *)
+                    if (elm.Key == "MOAIMoviePlayerIOS")
+                        funcName = funcName.Replace("+ (int) _", string.Empty);
 
                     if (elm.Value.FunctionDic.ContainsKey(funcName))
                     {
@@ -179,19 +187,23 @@ namespace MoaiAPIDocParser
                     for (var i = 0; i < funcKV.Value.FunctionParams.Count; i++)
                     {
                         var typeName = funcKV.Value.FunctionParams[i].Split(' ')[0];
-                        var paramName = funcKV.Value.FunctionParams[i].Split(' ')[1];
+                        var paramName = funcKV.Value.FunctionParams[i].Split(' ')[1].TrimEnd('.');
 
                         if (typeName == classKV.Key && paramName == "self")
                         {
                             withSelf = true;
                             continue;
                         }
+                        // Fix conflict with lua keyword 'end'
+                        if (paramName == "end")
+                            paramName = "endd";
 
                         //paramsContent += funcKV.Value.FunctionParams[i]
                         //    + ((i == funcKV.Value.FunctionParams.Count - 1) ? "" : ", ");
-                        paramsContent += funcKV.Value.FunctionParams[i].Split(' ')[1]
+                        paramsContent += paramName
                             + ((i == funcKV.Value.FunctionParams.Count - 1) ? "" : ", ");
                     }
+
                     var dot = withSelf ? ":" : ".";
                     var contents = $"{classKV.Key}{dot}{funcKV.Key}({paramsContent})";
                     fileStream.WriteLine("function " + contents + " end");
